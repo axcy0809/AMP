@@ -8,16 +8,18 @@
 #include <omp.h>
 #include <atomic>
 #include <chrono>
+#include <stdlib.h>
+#include <thread>
 
 ///////////////////////////////////////////////// TAS Lock
 
-class TASlock {
+class TAS_lock {
     std::atomic<bool> state;
     
     public:
 
-    TASlock(){
-        state.store(false);
+    TAS_lock(){
+        state = false;
     }
     
     void lock(){
@@ -33,13 +35,13 @@ class TASlock {
         
 //////////////////////////////////////////////// TTAS Lock
 
-class TTASlock {
+class TTAS_lock {
     std::atomic<bool> state;
     
     public:
 
-    TTASlock(){
-        state.store(false);
+    TTAS_lock(){
+        state = false;
     }
     
     void lock(){
@@ -57,6 +59,32 @@ class TTASlock {
 
 };
 
+/////////////////////////////////////////////// TicketLock
+
+class Ticket_lock {
+    std::atomic<int> ticket;
+    volatile int served;
+
+    public:
+    
+    Ticket_lock() {
+        ticket = 0;
+        served = 0;
+    }
+
+    void lock() {
+        int next = ticket.fetch_add(1);
+        while (served < next)
+        {}
+    }
+
+    void unlock() {
+        served++;
+    }
+
+};
+
+
 ///////////////////////////////////////////////////////////// main starts here //////////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) 
@@ -68,10 +96,10 @@ int main(int argc, char *argv[])
 
     int tid;                                // thread ID
     int numthreads = std::atoi(argv[1]);    // number of threads, command line input
-    long int iterations = 1e8;              // number of iterations in CS
+    long int iterations = 1e2;              // number of iterations in CS
     long int counter = 0;                   // counter gets incremented in CS
     long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
-    TASlock mylock;                         // instantiate the lock we will use
+    Ticket_lock mylock;                         // instantiate the lock we will use
 
     for (int i = 0; i < numthreads; ++i)
         turns[std::max(i*8-1,0)] = 0;
@@ -80,7 +108,7 @@ int main(int argc, char *argv[])
     omp_set_num_threads(numthreads);        // setting number of threads
 	
     start = std::chrono::high_resolution_clock::now();
-    #pragma omp parallel private (tid) shared(counter)
+    #pragma omp parallel private(tid) shared(counter)
 	{		
         tid = omp_get_thread_num();
 
