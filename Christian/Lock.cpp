@@ -59,7 +59,7 @@ class TTAS_lock {
 
 };
 
-/////////////////////////////////////////////// TicketLock
+/////////////////////////////////////////////// Ticket Lock
 
 class Ticket_lock {
     std::atomic<int> ticket;
@@ -84,6 +84,37 @@ class Ticket_lock {
 
 };
 
+///////////////////////////////////////////////// Array Lock
+
+class Array_lock {
+    std::atomic<bool>* flags;
+    std::atomic<int> tail;
+    int mySlot;
+    int numthreads;
+
+    public:
+
+    Array_lock(int n) : flags(new std::atomic<bool>[n]) {
+        for (int i = 0; i < n; ++i)
+            flags[i] = false;
+        flags[0] = true;
+        tail = 0;
+        numthreads = n;
+    }
+
+    void lock() {
+        mySlot = tail.fetch_add(1)%numthreads;
+        while (!flags[mySlot])
+        {}
+    }
+
+    void unlock() {
+        flags[mySlot] = false;
+        flags[(mySlot+1)%numthreads] = true;
+    }
+
+};
+
 
 ///////////////////////////////////////////////////////////// main starts here //////////////////////////////////////////////////////////////////
 
@@ -96,7 +127,7 @@ int main(int argc, char *argv[])
 
     int tid;                                // thread ID
     int numthreads = std::atoi(argv[1]);    // number of threads, command line input
-    long int iterations = 1e2;              // number of iterations in CS
+    long int iterations = 50;              // number of iterations in CS
     long int counter = 0;                   // counter gets incremented in CS
     long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
     Ticket_lock mylock;                         // instantiate the lock we will use
@@ -121,6 +152,7 @@ int main(int argc, char *argv[])
                 {
                     counter++;
                     turns[std::max(tid*8-1,0)]++;
+                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
                 }
             }
             catch (int j) {
