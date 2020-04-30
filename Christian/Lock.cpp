@@ -85,36 +85,104 @@ class Ticket_lock {
 };
 
 ///////////////////////////////////////////////// Array Lock
-
+/*
 class Array_lock {
-    std::atomic<bool>* flags;
+    bool* flag;
     std::atomic<int> tail;
-    int mySlot;
+    std::atomic<int>* mySlot;
     int numthreads;
 
     public:
 
-    Array_lock(int n) : flags(new std::atomic<bool>[n]) {
+    Array_lock(int n) : flag(new bool[n]), mySlot(new std::atomic<int>[n]) {    ///////////////////////////// false sharing noch korrigieren
         for (int i = 0; i < n; ++i)
-            flags[i] = false;
-        flags[0] = true;
+            flag[i] = false;
+        flag[0] = true;
         tail = 0;
         numthreads = n;
     }
 
-    void lock() {
-        mySlot = tail.fetch_add(1)%numthreads;
-        while (!flags[mySlot])
+    void lock(int tid) {
+        mySlot[tid] = tail.fetch_add(1)%numthreads;
+        while (!flag[mySlot[tid]])
         {}
     }
 
-    void unlock() {
-        flags[mySlot] = false;
-        flags[(mySlot+1)%numthreads] = true;
+    void unlock(int tid) {
+        flag[mySlot[tid]] = false;
+        flag[(mySlot[tid]+1)%numthreads] = true;
+    }
+
+};*/
+
+class Array_lock {
+    std::atomic<bool>* flag;
+    std::atomic<int> tail;
+    int numthreads;
+
+    public:
+
+    Array_lock(int n) : flag(new std::atomic<bool>[n]) {    
+        for (int i = 0; i < n; ++i)
+            flag[i] = false;
+        flag[0] = true;
+        tail = 0;
+        numthreads = n;
+    }
+
+    void lock(int* mySlot) {
+        *mySlot = tail.fetch_add(1)%numthreads;
+        while (!flag[*mySlot])
+        {}
+    }
+
+    void unlock(int* mySlot) {
+        flag[*mySlot] = false;
+        flag[(*mySlot+1)%numthreads] = true;
     }
 
 };
 
+
+///////////////////////////////////////////////////////////// CLH Lock
+
+class QNode {
+
+    public:
+    std::atomic<bool> locked;
+    QNode* pred;
+    
+    QNode() {
+        locked = false;
+        pred = nullptr;
+    }   
+};
+    
+class CLH_lock {
+
+    std::atomic<QNode*> tail;
+    
+    public:
+    
+    CLH_lock() {
+        tail = new QNode;
+    }
+
+    void lock(QNode** pointerToNode) {
+        QNode* node = new QNode;
+        *pointerToNode = node;
+        node->locked = true;
+        node->pred = std::atomic_exchange(&tail,node);
+        while (node->pred->locked) 
+        {}
+    }
+
+    void unlock(QNode* node) {
+        delete node->pred;
+        node->locked = false;
+    }
+
+};
 
 ///////////////////////////////////////////////////////////// main starts here //////////////////////////////////////////////////////////////////
 
@@ -127,10 +195,12 @@ int main(int argc, char *argv[])
 
     int tid;                                // thread ID
     int numthreads = std::atoi(argv[1]);    // number of threads, command line input
-    long int iterations = 50;              // number of iterations in CS
+    long int iterations = std::atoi(argv[2]);              // number of iterations in CS
     long int counter = 0;                   // counter gets incremented in CS
     long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
-    Ticket_lock mylock;                         // instantiate the lock we will use
+    TTAS_lock mylock;
+    //Array_lock mylock(numthreads);          // instantiate the lock we will use
+    //CLH_lock mylock;
 
     for (int i = 0; i < numthreads; ++i)
         turns[std::max(i*8-1,0)] = 0;
@@ -141,11 +211,15 @@ int main(int argc, char *argv[])
     start = std::chrono::high_resolution_clock::now();
     #pragma omp parallel private(tid) shared(counter)
 	{		
+        thread_local int mySlot;
+        //thread_local QNode* pointerToNode;// = &node;
         tid = omp_get_thread_num();
 
         while(counter < iterations)
         {
             mylock.lock();
+            //mylock.lock(&pointerToNode);
+            //mylock.lock(&mySlot);
             // Critical Section
             try {
                 if(counter < iterations)
@@ -159,6 +233,8 @@ int main(int argc, char *argv[])
                 std::cout << "Some error occured while in CS" << std::endl;
             }
             mylock.unlock();
+            //mylock.unlock(pointerToNode);
+            //mylock.unlock(&mySlot);
         }
     }
     end = std::chrono::high_resolution_clock::now();
