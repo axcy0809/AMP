@@ -177,13 +177,66 @@ class CLH_lock {
         {}
     }
 
-    void unlock(QNode* node) {
+    void unlock(QNode* node) {  
         delete node->pred;
         node->locked = false;
     }
 
 };
 
+///////////////////////////////////////////////////////////////////////// MCS Lock
+
+class Node {
+    
+    public:
+        std::atomic<bool> locked;
+        Node* pred;
+        Node* next;
+
+    Node() {
+        pred = nullptr;
+        next = nullptr;
+        locked = false;
+    }
+};
+
+class MCS_lock {
+    
+    std::atomic<Node*> tail;
+
+    public:
+
+    MCS_lock() {
+        tail = nullptr;
+    }
+
+    void lock(Node* node, int tid) {
+        Node* my = node;
+        Node* pred = std::atomic_exchange(&tail,my);
+        if (pred != nullptr) {
+            my->locked = true;
+            pred->next = my;
+            while (my->locked)
+            {}
+        }
+    }
+
+    void unlock(Node* node, int tid) {
+        Node* my = node;
+        if (my->next == nullptr) {
+            Node* compare = tail.exchange(nullptr);
+            if (compare == my) {
+                return;
+            }
+            my = node;
+            while (my->next == nullptr)
+            {}
+        }
+        my->next->locked = false;
+        my->next =  nullptr;
+    }
+
+};
 ///////////////////////////////////////////////////////////// main starts here //////////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) 
@@ -198,9 +251,10 @@ int main(int argc, char *argv[])
     long int iterations = std::atoi(argv[2]);              // number of iterations in CS
     long int counter = 0;                   // counter gets incremented in CS
     long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
-    TTAS_lock mylock;
+    //TTAS_lock mylock;
     //Array_lock mylock(numthreads);          // instantiate the lock we will use
     //CLH_lock mylock;
+    MCS_lock mylock;
 
     for (int i = 0; i < numthreads; ++i)
         turns[std::max(i*8-1,0)] = 0;
@@ -211,14 +265,16 @@ int main(int argc, char *argv[])
     start = std::chrono::high_resolution_clock::now();
     #pragma omp parallel private(tid) shared(counter)
 	{		
-        thread_local int mySlot;
-        //thread_local QNode* pointerToNode;// = &node;
+        //thread_local int mySlot;
+        //thread_local QNode* pointerToNode;
+        thread_local Node* my = new Node();
         tid = omp_get_thread_num();
 
         while(counter < iterations)
         {
-            mylock.lock();
+            //mylock.lock();
             //mylock.lock(&pointerToNode);
+            mylock.lock(my, tid);
             //mylock.lock(&mySlot);
             // Critical Section
             try {
@@ -232,8 +288,9 @@ int main(int argc, char *argv[])
             catch (int j) {
                 std::cout << "Some error occured while in CS" << std::endl;
             }
-            mylock.unlock();
+            //mylock.unlock();
             //mylock.unlock(pointerToNode);
+            mylock.unlock(my, tid);
             //mylock.unlock(&mySlot);
         }
     }
