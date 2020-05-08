@@ -249,24 +249,20 @@ class MCS_lock {
     }
 
 };
-///////////////////////////////////////////////////////////// main starts here //////////////////////////////////////////////////////////////////
 
-int main(int argc, char *argv[]) 
-{
+///////////////////////////////////////////////////////////// TAS
+
+void run_TAS_lock(int numthreads, int iterations) {
+
     // setup timer variables
     std::chrono::time_point<std::chrono::high_resolution_clock> start;
     std::chrono::time_point<std::chrono::high_resolution_clock> end;
     double runtime;
 
     int tid;                                // thread ID
-    int numthreads = std::atoi(argv[1]);    // number of threads, command line input
-    long int iterations = std::atoi(argv[2]);              // number of iterations in CS
     long int counter = 0;                   // counter gets incremented in CS
     long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
-    //TTAS_lock mylock;
-    //Array_lock mylock(numthreads);          // instantiate the lock we will use
-    //CLH_lock mylock;
-    MCS_lock mylock;
+    TAS_lock mylock;
 
     for (int i = 0; i < numthreads; ++i)
         turns[std::max(i*8-1,0)] = 0;
@@ -276,19 +272,11 @@ int main(int argc, char *argv[])
 	
     start = std::chrono::high_resolution_clock::now();
     #pragma omp parallel private(tid) shared(counter)
-	{		
-        //thread_local int mySlot;
-        //thread_local QNode* pointerToNode; 
-        thread_local Node my;
+	{		    
         tid = omp_get_thread_num();
-    
         while(counter < iterations)
         {
-            //mylock.lock();
-            //mylock.lock(&pointerToNode);
-            mylock.lock(&my);
-            //mylock.lock(&mySlot);
-            // Critical Section
+            mylock.lock();
             try {
                 if(counter < iterations)
                 {
@@ -300,10 +288,7 @@ int main(int argc, char *argv[])
             catch (int j) {
                 std::cout << "Some error occured while in CS" << std::endl;
             }
-            //mylock.unlock();
-            //mylock.unlock(pointerToNode);
-            mylock.unlock(&my);
-            //mylock.unlock(&mySlot);
+            mylock.unlock();
         }
         
     }
@@ -315,7 +300,299 @@ int main(int argc, char *argv[])
     for (int i = 0; i < numthreads; ++i)
         std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
     std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
-				
+
+}
+
+///////////////////////////////////////////////////////////// TTAS
+
+void run_TTAS_lock(int numthreads, int iterations) {
+
+    // setup timer variables
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> end;
+    double runtime;
+
+    int tid;                                // thread ID
+    long int counter = 0;                   // counter gets incremented in CS
+    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    TTAS_lock mylock;
+
+    for (int i = 0; i < numthreads; ++i)
+        turns[std::max(i*8-1,0)] = 0;
+    
+
+    omp_set_num_threads(numthreads);        // setting number of threads
+	
+    start = std::chrono::high_resolution_clock::now();
+    #pragma omp parallel private(tid) shared(counter)
+	{		    
+        tid = omp_get_thread_num();
+        while(counter < iterations)
+        {
+            mylock.lock();
+            try {
+                if(counter < iterations)
+                {
+                    counter++;
+                    turns[std::max(tid*8-1,0)]++;
+                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
+                }
+            }
+            catch (int j) {
+                std::cout << "Some error occured while in CS" << std::endl;
+            }
+            mylock.unlock();
+        }
+        
+    }
+    end = std::chrono::high_resolution_clock::now();
+    runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+
+    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << "counter " << counter << std::endl << std::endl;
+    for (int i = 0; i < numthreads; ++i)
+        std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
+    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+
+}
+
+///////////////////////////////////////////////////////////// Ticket
+
+void run_Ticket_lock(int numthreads, int iterations) {
+
+    // setup timer variables
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> end;
+    double runtime;
+
+    int tid;                                // thread ID
+    long int counter = 0;                   // counter gets incremented in CS
+    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    Ticket_lock mylock;
+
+    for (int i = 0; i < numthreads; ++i)
+        turns[std::max(i*8-1,0)] = 0;
+    
+
+    omp_set_num_threads(numthreads);        // setting number of threads
+	
+    start = std::chrono::high_resolution_clock::now();
+    #pragma omp parallel private(tid) shared(counter)
+	{		    
+        tid = omp_get_thread_num();
+        while(counter < iterations)
+        {
+            mylock.lock();
+            try {
+                if(counter < iterations)
+                {
+                    counter++;
+                    turns[std::max(tid*8-1,0)]++;
+                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
+                }
+            }
+            catch (int j) {
+                std::cout << "Some error occured while in CS" << std::endl;
+            }
+            mylock.unlock();
+        }
+        
+    }
+    end = std::chrono::high_resolution_clock::now();
+    runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+
+    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << "counter " << counter << std::endl << std::endl;
+    for (int i = 0; i < numthreads; ++i)
+        std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
+    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+
+}
+
+///////////////////////////////////////////////////////////// Array
+
+void run_Array_lock(int numthreads, int iterations) {
+
+    // setup timer variables
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> end;
+    double runtime;
+
+    int tid;                                // thread ID
+    long int counter = 0;                   // counter gets incremented in CS
+    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    Array_lock mylock(numthreads);
+
+    for (int i = 0; i < numthreads; ++i)
+        turns[std::max(i*8-1,0)] = 0;
+    
+
+    omp_set_num_threads(numthreads);        // setting number of threads
+	
+    start = std::chrono::high_resolution_clock::now();
+    #pragma omp parallel private(tid) shared(counter)
+	{		    
+        thread_local int mySlot;
+        tid = omp_get_thread_num();
+        while(counter < iterations)
+        {
+            mylock.lock(&mySlot);
+            try {
+                if(counter < iterations)
+                {
+                    counter++;
+                    turns[std::max(tid*8-1,0)]++;
+                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
+                }
+            }
+            catch (int j) {
+                std::cout << "Some error occured while in CS" << std::endl;
+            }
+            mylock.unlock(&mySlot);
+        }
+        
+    }
+    end = std::chrono::high_resolution_clock::now();
+    runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+
+    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << "counter " << counter << std::endl << std::endl;
+    for (int i = 0; i < numthreads; ++i)
+        std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
+    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+
+}
+
+///////////////////////////////////////////////////////////// CLH
+
+void run_CLH_lock(int numthreads, int iterations) {
+
+    // setup timer variables
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> end;
+    double runtime;
+
+    int tid;                                // thread ID
+    long int counter = 0;                   // counter gets incremented in CS
+    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    CLH_lock mylock;
+
+    for (int i = 0; i < numthreads; ++i)
+        turns[std::max(i*8-1,0)] = 0;
+    
+
+    omp_set_num_threads(numthreads);        // setting number of threads
+	
+    start = std::chrono::high_resolution_clock::now();
+    #pragma omp parallel private(tid) shared(counter)
+	{		    
+        thread_local QNode* pointerToNode;
+        tid = omp_get_thread_num();
+        while(counter < iterations)
+        {
+            mylock.lock(&pointerToNode);
+            try {
+                if(counter < iterations)
+                {
+                    counter++;
+                    turns[std::max(tid*8-1,0)]++;
+                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
+                }
+            }
+            catch (int j) {
+                std::cout << "Some error occured while in CS" << std::endl;
+            }
+            mylock.unlock(pointerToNode);
+        }
+        
+    }
+    end = std::chrono::high_resolution_clock::now();
+    runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+
+    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << "counter " << counter << std::endl << std::endl;
+    for (int i = 0; i < numthreads; ++i)
+        std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
+    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+
+}
+
+///////////////////////////////////////////////////////////// MCS
+
+void run_MCS_lock(int numthreads, int iterations) {
+
+    // setup timer variables
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> end;
+    double runtime;
+
+    int tid;                                // thread ID
+    long int counter = 0;                   // counter gets incremented in CS
+    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    MCS_lock mylock;
+
+    for (int i = 0; i < numthreads; ++i)
+        turns[std::max(i*8-1,0)] = 0;
+    
+
+    omp_set_num_threads(numthreads);        // setting number of threads
+	
+    start = std::chrono::high_resolution_clock::now();
+    #pragma omp parallel private(tid) shared(counter)
+	{		    
+        thread_local Node my;
+        tid = omp_get_thread_num();
+        while(counter < iterations)
+        {
+            mylock.lock(&my);
+            try {
+                if(counter < iterations)
+                {
+                    counter++;
+                    turns[std::max(tid*8-1,0)]++;
+                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
+                }
+            }
+            catch (int j) {
+                std::cout << "Some error occured while in CS" << std::endl;
+            }
+            mylock.unlock(&my);
+        }
+        
+    }
+    end = std::chrono::high_resolution_clock::now();
+    runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+
+    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << "counter " << counter << std::endl << std::endl;
+    for (int i = 0; i < numthreads; ++i)
+        std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
+    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+
+}
+
+
+///////////////////////////////////////////////////////////// main starts here //////////////////////////////////////////////////////////////////
+
+int main(int argc, char *argv[]) 
+{
+
+    std::string name = argv[1];
+    int numthreads = std::atoi(argv[2]);    // number of threads, command line input
+    long int iterations = std::atoi(argv[3]);              // number of iterations in CS
+		
+    if (name.compare("TAS_lock"))
+        run_TAS_lock(numthreads, iterations);
+    if (name.compare("TTAS_lock"))
+        run_TTAS_lock(numthreads, iterations);
+    if (name.compare("Ticket_lock"))	
+        run_Ticket_lock(numthreads, iterations);
+    if (name.compare("Array_lock"))
+        run_Array_lock(numthreads, iterations);
+    if (name.compare("CLH_lock"))
+        run_CLH_lock(numthreads, iterations);
+    if (name.compare("MCS_lock"))
+        run_MCS_lock(numthreads, iterations);
 }
 
 
