@@ -188,52 +188,64 @@ class CLH_lock {
 
 class Node {
     
+    private:
+     std::atomic<bool> locked;
+     std::atomic<Node*> next;
+
     public:
-        std::atomic<bool> locked;
-        Node* pred;
-        Node* next;
 
     Node() {
-        pred = nullptr;
         next = nullptr;
         locked = false;
+    }
+
+    void setLocked(bool val) {
+        this->locked = val;
+    }
+    void setNext(Node* val) {
+        this->next = val;
+    }
+    bool getLocked() {
+        return this->locked;
+    }
+    Node* getNext() {
+        return this->next;
     }
 };
 
 class MCS_lock {
-    
-    std::atomic<Node*> tail;
 
     public:
+    std::atomic<Node*> tail;
 
     MCS_lock() {
         tail = nullptr;
     }
 
-    void lock(Node* node, int tid) {
+    void lock(Node* node) {
         Node* my = node;
-        Node* pred = std::atomic_exchange(&tail,my);
+        Node* pred = tail.exchange(my, std::memory_order_acquire);
         if (pred != nullptr) {
-            my->locked = true;
-            pred->next = my;
-            while (my->locked)
+            my->setLocked(true);
+            pred->setNext(my);
+            while (my->getLocked())
             {}
         }
     }
 
-    void unlock(Node* node, int tid) {
+    void unlock(Node* node) {
         Node* my = node;
-        if (my->next == nullptr) {
-            Node* compare = tail.exchange(nullptr);
-            if (compare == my) {
+        if (my->getNext() == nullptr) {
+            Node* p = my;
+            if (tail.compare_exchange_strong(p, nullptr, std::memory_order_release, std::memory_order_relaxed)) {
                 return;
             }
-            my = node;
-            while (my->next == nullptr)
+
+            while (my->getNext() == nullptr)
             {}
         }
-        my->next->locked = false;
-        my->next =  nullptr;
+        my->getNext()->setLocked(false);
+        my->setNext(nullptr);
     }
 
 };
@@ -266,15 +278,15 @@ int main(int argc, char *argv[])
     #pragma omp parallel private(tid) shared(counter)
 	{		
         //thread_local int mySlot;
-        //thread_local QNode* pointerToNode;
-        thread_local Node* my = new Node();
+        //thread_local QNode* pointerToNode; 
+        thread_local Node my;
         tid = omp_get_thread_num();
-
+    
         while(counter < iterations)
         {
             //mylock.lock();
             //mylock.lock(&pointerToNode);
-            mylock.lock(my, tid);
+            mylock.lock(&my);
             //mylock.lock(&mySlot);
             // Critical Section
             try {
@@ -290,9 +302,10 @@ int main(int argc, char *argv[])
             }
             //mylock.unlock();
             //mylock.unlock(pointerToNode);
-            mylock.unlock(my, tid);
+            mylock.unlock(&my);
             //mylock.unlock(&mySlot);
         }
+        
     }
     end = std::chrono::high_resolution_clock::now();
     runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
