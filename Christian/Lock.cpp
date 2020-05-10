@@ -250,6 +250,9 @@ class MCS_lock {
 
 };
 
+class execute {
+
+public:
 ///////////////////////////////////////////////////////////// TAS
 
 void run_TAS_lock(int numthreads, int iterations) {
@@ -295,7 +298,7 @@ void run_TAS_lock(int numthreads, int iterations) {
     end = std::chrono::high_resolution_clock::now();
     runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
 
-    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << std::endl << "Program ran in TAS Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
     std::cout << "counter " << counter << std::endl << std::endl;
     for (int i = 0; i < numthreads; ++i)
         std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
@@ -348,7 +351,7 @@ void run_TTAS_lock(int numthreads, int iterations) {
     end = std::chrono::high_resolution_clock::now();
     runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
 
-    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << std::endl << "Program ran in TTAS Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
     std::cout << "counter " << counter << std::endl << std::endl;
     for (int i = 0; i < numthreads; ++i)
         std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
@@ -401,7 +404,7 @@ void run_Ticket_lock(int numthreads, int iterations) {
     end = std::chrono::high_resolution_clock::now();
     runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
 
-    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << std::endl << "Program ran in Ticket Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
     std::cout << "counter " << counter << std::endl << std::endl;
     for (int i = 0; i < numthreads; ++i)
         std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
@@ -455,7 +458,7 @@ void run_Array_lock(int numthreads, int iterations) {
     end = std::chrono::high_resolution_clock::now();
     runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
 
-    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << std::endl << "Program ran in Array Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
     std::cout << "counter " << counter << std::endl << std::endl;
     for (int i = 0; i < numthreads; ++i)
         std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
@@ -509,7 +512,7 @@ void run_CLH_lock(int numthreads, int iterations) {
     end = std::chrono::high_resolution_clock::now();
     runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
 
-    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << std::endl << "Program ran in CLH Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
     std::cout << "counter " << counter << std::endl << std::endl;
     for (int i = 0; i < numthreads; ++i)
         std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
@@ -521,6 +524,7 @@ void run_CLH_lock(int numthreads, int iterations) {
 
 void run_MCS_lock(int numthreads, int iterations) {
 
+    std::cout << "Hello" << std::endl;
     // setup timer variables
     std::chrono::time_point<std::chrono::high_resolution_clock> start;
     std::chrono::time_point<std::chrono::high_resolution_clock> end;
@@ -563,7 +567,7 @@ void run_MCS_lock(int numthreads, int iterations) {
     end = std::chrono::high_resolution_clock::now();
     runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
 
-    std::cout << "Program ran with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+    std::cout << std::endl << "Program ran in MCS_Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
     std::cout << "counter " << counter << std::endl << std::endl;
     for (int i = 0; i < numthreads; ++i)
         std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
@@ -571,28 +575,38 @@ void run_MCS_lock(int numthreads, int iterations) {
 
 }
 
+};
+
 
 ///////////////////////////////////////////////////////////// main starts here //////////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) 
 {
 
-    std::string name = argv[1];
+    int mode = std::atoi(argv[1]);
     int numthreads = std::atoi(argv[2]);    // number of threads, command line input
     long int iterations = std::atoi(argv[3]);              // number of iterations in CS
 		
-    if (name.compare("TAS_lock"))
-        run_TAS_lock(numthreads, iterations);
-    if (name.compare("TTAS_lock"))
-        run_TTAS_lock(numthreads, iterations);
-    if (name.compare("Ticket_lock"))	
-        run_Ticket_lock(numthreads, iterations);
-    if (name.compare("Array_lock"))
-        run_Array_lock(numthreads, iterations);
-    if (name.compare("CLH_lock"))
-        run_CLH_lock(numthreads, iterations);
-    if (name.compare("MCS_lock"))
-        run_MCS_lock(numthreads, iterations);
+    execute Locker;
+
+    if (mode == 1) {
+        Locker.run_TAS_lock(numthreads, iterations);
+    }
+    if (mode == 2) {
+        Locker.run_TTAS_lock(numthreads, iterations);
+    }
+    if (mode == 3) {
+        Locker.run_Ticket_lock(numthreads, iterations);
+    }
+    if (mode == 4) {
+        Locker.run_Array_lock(numthreads, iterations);
+    }
+    if (mode == 5) {
+        Locker.run_CLH_lock(numthreads, iterations);
+    }
+    if (mode == 6) {
+        Locker.run_MCS_lock(numthreads, iterations);
+    }
 }
 
 
