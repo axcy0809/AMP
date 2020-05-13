@@ -116,13 +116,13 @@ class Array_lock {
 };*/
 
 class Array_lock {
-    std::atomic<bool>* flag;
+    bool* flag;
     std::atomic<int> tail;
     int numthreads;
 
     public:
 
-    Array_lock(int n) : flag(new std::atomic<bool>[n]) {    
+    Array_lock(int n) : flag(new bool[n]) {    
         for (int i = 0; i < n; ++i)
             flag[i] = false;
         flag[0] = true;
