@@ -350,7 +350,8 @@ void run_TAS_lock(int numthreads, int iterations, int numofiter) {
 
 ///////////////////////////////////////////////////////////// TTAS
 
-void run_TTAS_lock(int numthreads, int iterations) {
+void run_TTAS_lock(int numthreads, int iterations) 
+{
 
     // setup timer variables
     std::chrono::time_point<std::chrono::high_resolution_clock> start;
