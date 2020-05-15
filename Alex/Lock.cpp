@@ -264,17 +264,15 @@ void run_TAS_lock(int numthreads, int iterations, int numofiter) {
     // setup timer variables
     std::chrono::time_point<std::chrono::high_resolution_clock> start;
     std::chrono::time_point<std::chrono::high_resolution_clock> end;
-    double runtime;
-
+    double runtime = 0;
+    double totruntime = 0;
     std::string file_name;
 
-    double HowFair;
+    double HowFair = 0;
     double mean = 0;
     double var = 0;
     double tmp = 0;
     std::vector<int> Verteilung (numthreads,0);
-
-    std::vector <std::vector<double>> results(numofiter, std::vector<double>(4, 0));
 
 
     int tid;                                // thread ID
@@ -332,13 +330,9 @@ void run_TAS_lock(int numthreads, int iterations, int numofiter) {
         }
 
         var = sqrt(tmp/numthreads);
-        
-        HowFair = var;
-        results[n][0] = numthreads;
-        results[n][1] = runtime;
-        results[n][2] = HowFair;
-        std::cout << n << std::endl;
-        std::cout << mean << std::endl;
+        std::cout << var << std::endl;
+        HowFair = HowFair + var;
+        totruntime = totruntime + runtime;
         //std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
         //std::cout << std::endl << "iterations " << iterations << " numthreads " << results[iterations][0] << " runtime " << results[iterations][1] << " HowFair " << results[iterations][2] << std::endl;
         
@@ -348,11 +342,9 @@ void run_TAS_lock(int numthreads, int iterations, int numofiter) {
     std::ofstream myfile;
     myfile.open (file_name);
     myfile << "NumberOfThreads" << ";" << "NumberOfIterations" << ";" << "RunTime" << ";" << "HowFair" << "; \n";
-    for (int n = 0; n < numofiter; n++)
-    {
-        myfile << n << ";" << results[n][0] << ";" << results[n][1] << ";" << results[n][2] << ";";	  
-        myfile << std::endl;
-    }
+    myfile << iterations << ";" << numthreads << ";" << totruntime/numofiter << ";" << HowFair/numofiter << ";";	  
+    myfile << std::endl;
+
     myfile.close();
 }
 
@@ -710,7 +702,7 @@ int main(int argc, char *argv[])
     //long int maxiterations = std::atoi(argv[3]);              // number of iterations in CS
     long int iterations = std::atoi(argv[3]);
     results = std::vector<double>(3, 0);
-    int numofiter = 30;
+    int numofiter = 50;
 		
     execute Locker;
     //for (int iterations = 0; iterations < maxiterations; iterations = iterations + 1)
