@@ -1,43 +1,28 @@
-#include <assert.h>
+// classes example
 #include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <random>
-#include <omp.h>
-#include <atomic>
-#include <chrono>
-#include <stdlib.h>
-#include <thread>
-#include <string>
-#include <fstream>
+using namespace std;
 
-using namespace std; 
-class Geeks 
-{ 
-    // Access specifier 
-    public: 
-  
-    // Data Members 
-    string geekname; 
-  
-    // Member Functions() 
-    void printname() 
-    { 
-       cout << "Geekname is: " << geekname; 
-    } 
-}; 
-  
-int main() { 
-  
-    // Declare an object of class geeks 
-    Geeks obj1; 
-  
-    // accessing data member 
-    obj1.geekname = "Abhi"; 
-  
-    // accessing member function 
-    obj1.printname(); 
-    return 0; 
-} 
+class Rectangle 
+{
+    int width, height;
+    public:
+        void set_values (int,int);
+        int area() 
+        {
+            return width*height;
+        }
+};
+
+void Rectangle::set_values (int x, int y) 
+{
+    width = x;
+    height = y;
+}
+
+int main () 
+{
+    Rectangle rect;
+    rect.set_values (3,4);
+    cout << "area: " << rect.area() << endl;    
+    return 0;
+}
