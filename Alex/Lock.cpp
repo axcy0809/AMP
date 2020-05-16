@@ -76,13 +76,15 @@ class Ticket_lock {
         served = 0;
     }
 
-    void lock() {
+    void lock() 
+    {
         int next = ticket.fetch_add(1);
         while (served < next)
         {}
     }
 
-    void unlock() {
+    void unlock() 
+    {
         served++;
     }
 
@@ -126,7 +128,8 @@ class Array_lock {
 
     public:
 
-    Array_lock(int n) : flag(new volatile bool[n]) {    
+    Array_lock(int n) : flag(new volatile bool[n]) 
+    {    
         for (int i = 0; i < n; ++i)
             flag[i] = false;
         flag[0] = true;
