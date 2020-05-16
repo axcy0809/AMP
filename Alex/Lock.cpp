@@ -307,11 +307,11 @@ double Varianz(int iterations, int numthreads,double *field)
 
 void output(std::string Lockname, int iterations, int numthreads, int numofiter, double totruntime, double HowFair)
 {
-    file_name = "data/Max"+std::to_string(iterations)+"_"+std::to_string(numthreads)+Lockname+".csv";
+    file_name = "data/"+Lockname+"_"+std::to_string(numthreads)+"_"+std::to_string(iterations)+".csv";
     std::ofstream myfile;
     myfile.open (file_name);
-    myfile << "NumberOfThreads" << ";" << "NumberOfIterations" << ";" << "RunTime" << ";" << "HowFair" << "; \n";
-    myfile << iterations << ";" << numthreads << ";" << totruntime/numofiter << ";" << HowFair/numofiter << ";";	  
+    myfile << "NameOfLock" << ";" <<"NumberOfIterations" << ";" << "NumberOfThreads"<< ";" << "RunTime" << ";" << "HowFair" << "\n";
+    myfile << Lockname << ";" << iterations << ";" << numthreads << ";" << totruntime/numofiter << ";" << HowFair/numofiter;	  
     myfile << std::endl;
     myfile.close();
 }
