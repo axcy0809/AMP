@@ -1,0 +1,2 @@
+NumberOfThreads;NumberOfIterations;RunTime;HowFair; 
+10000;5;0.967513;169.957;

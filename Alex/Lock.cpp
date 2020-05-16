@@ -260,29 +260,73 @@ class MCS_lock {
 class execute {
 
 public:
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> end;
+    std::string file_name;
+
+    double runtime = 0;
+    double totruntime = 0;
+    double HowFair = 0;
+    double mean = 0;
+    double var = 0;
+    double tmp = 0;
+
+long int CS(long int counter, int iterations, double *turns,int tid)
+{
+    //std::cout << "Thread " << tid << " is in critical section" << std::endl;
+    try {
+            if(counter < iterations)
+            {
+                counter++;    // function
+                turns[std::max(tid*8-1,0)]++;
+                std::cout << "Thread " << tid << " is in critical section" << std::endl;
+            }
+        }
+        catch (int j) {
+            std::cout << "Some error occured while in CS" << std::endl;
+        }
+
+return counter;
+}   
+
+double Varianz(int iterations, int numthreads,double *field)
+{
+        mean = iterations/numthreads;
+        //std::cout << mean << std::endl;
+        for (int i = 0; i < numthreads; ++i)
+        {
+            tmp = tmp + (field[i] - mean) * (field[i] - mean);
+            std::cout << "i: " << i << "turn: " << field[i] << std::endl;          
+        }
+        var = sqrt(tmp/numthreads);
+        //std::cout << var << std::endl;
+        HowFair = HowFair + var;
+        //std::cout << "HowFair: " << HowFair << std::endl;
+    return HowFair;
+}
+
+void output(std::string Lockname, int iterations, int numthreads, int numofiter, double totruntime, double HowFair)
+{
+    file_name = "data/Max"+std::to_string(iterations)+"_"+std::to_string(numthreads)+Lockname+".csv";
+    std::ofstream myfile;
+    myfile.open (file_name);
+    myfile << "NumberOfThreads" << ";" << "NumberOfIterations" << ";" << "RunTime" << ";" << "HowFair" << "; \n";
+    myfile << iterations << ";" << numthreads << ";" << totruntime/numofiter << ";" << HowFair/numofiter << ";";	  
+    myfile << std::endl;
+    myfile.close();
+}
 ///////////////////////////////////////////////////////////// TAS
 
 void run_TAS_lock(int numthreads, int iterations, int numofiter) {
 
     // setup timer variables
-    std::chrono::time_point<std::chrono::high_resolution_clock> start;
-    std::chrono::time_point<std::chrono::high_resolution_clock> end;
-    double runtime = 0;
-    double totruntime = 0;
-    std::string file_name;
-
-    double HowFair = 0;
-    double mean = 0;
-    double var = 0;
-    double tmp = 0;
-    std::vector<int> Verteilung (numthreads,0);
-
-
     int tid;                                // thread ID
     long int counter = 0;                   // counter gets incremented in CS
-    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    double Verteilung[numthreads];
+    double Time[numofiter];
+    double turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    
     TAS_lock mylock;
-
 
     for (int i = 0; i < numthreads; ++i)
         turns[std::max(i*8-1,0)] = 0;
@@ -299,142 +343,100 @@ void run_TAS_lock(int numthreads, int iterations, int numofiter) {
             while(counter < iterations)
             {
                 mylock.lock();
-                try {
-                    if(counter < iterations)
-                    {
-                        counter++;
-                        turns[std::max(tid*8-1,0)]++;
-                        std::cout << "Thread " << tid << " is in critical section" << std::endl;
-                    }
-                }
-                catch (int j) {
-                    //std::cout << "Some error occured while in CS" << std::endl;
-                }
+                counter = CS(counter,iterations,turns,tid);
                 mylock.unlock();
-            }
-            
+            }           
         }
         end = std::chrono::high_resolution_clock::now();
         runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+        Time[n] = runtime;
         //std::cout << std::endl << "Program ran in TAS Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
         //std::cout << "counter " << counter << std::endl << std::endl;
+
+
         for (int i = 0; i < numthreads; ++i)
         {
             std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
-            //std::cout << i <<  std::endl;
             Verteilung[i] = turns[std::max(i*8-1,0)];
         }
-
-        mean = iterations/numthreads;
-
-        for (int i = 0; i < numthreads; ++i)
-        {
-            tmp = tmp + (Verteilung[i] - mean) * (Verteilung[i] - mean);           
-        }
-
-        var = sqrt(tmp/numthreads);
-        std::cout << var << std::endl;
-        HowFair = HowFair + var;
+        HowFair = Varianz(iterations,numthreads,Verteilung);
         totruntime = totruntime + runtime;
         //std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
         //std::cout << std::endl << "iterations " << iterations << " numthreads " << results[iterations][0] << " runtime " << results[iterations][1] << " HowFair " << results[iterations][2] << std::endl;
         
     }
-    file_name = "data/Max"+std::to_string(iterations)+"_"+std::to_string(numthreads)+"TAS_lock.csv";
-        //return results;
-    std::ofstream myfile;
-    myfile.open (file_name);
-    myfile << "NumberOfThreads" << ";" << "NumberOfIterations" << ";" << "RunTime" << ";" << "HowFair" << "; \n";
-    myfile << iterations << ";" << numthreads << ";" << totruntime/numofiter << ";" << HowFair/numofiter << ";";	  
-    myfile << std::endl;
-
-    myfile.close();
+    //totruntime = Varianz(iterations,numthreads,Time);
+    output("TAS_lock",iterations,numthreads,numofiter,totruntime,HowFair);
 }
 
 ///////////////////////////////////////////////////////////// TTAS
 
-void run_TTAS_lock(int numthreads, int iterations) 
+void run_TTAS_lock(int numthreads, int iterations, int numofiter) 
 {
-
     // setup timer variables
-    std::chrono::time_point<std::chrono::high_resolution_clock> start;
-    std::chrono::time_point<std::chrono::high_resolution_clock> end;
-    std::vector<double> results; // results array
-    double runtime;
-    std::string file_name;
-    double HowFair;
+
+    //std::vector<int> Verteilung (numthreads,0);
     int tid;                                // thread ID
     long int counter = 0;                   // counter gets incremented in CS
-    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    double Verteilung[numthreads];
+    double Time[numofiter];
+    double turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
     TTAS_lock mylock;
-    results = std::vector<double>(3, 0);  // Creates a result array
 
     for (int i = 0; i < numthreads; ++i)
         turns[std::max(i*8-1,0)] = 0;
     
 
     omp_set_num_threads(numthreads);        // setting number of threads
-	
-    start = std::chrono::high_resolution_clock::now();
-    #pragma omp parallel private(tid) shared(counter)
-	{		    
-        tid = omp_get_thread_num();
-        while(counter < iterations)
-        {
-            mylock.lock();
-            try {
-                if(counter < iterations)
-                {
-                    counter++;
-                    turns[std::max(tid*8-1,0)]++;
-                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
-                }
+	for (int n = 0; n < numofiter; n++)
+    {	
+        start = std::chrono::high_resolution_clock::now();
+        #pragma omp parallel private(tid) shared(counter)
+        {		    
+            tid = omp_get_thread_num();
+            while(counter < iterations)
+            {
+                mylock.lock();
+                counter = CS(counter,iterations,turns,tid);
+                mylock.unlock();
             }
-            catch (int j) {
-                std::cout << "Some error occured while in CS" << std::endl;
-            }
-            mylock.unlock();
+            
         }
+        end = std::chrono::high_resolution_clock::now();
+        runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+        Time[n] = runtime;
+        //std::cout << std::endl << "Program ran in TAS Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+        //std::cout << "counter " << counter << std::endl << std::endl;
+
+
+        for (int i = 0; i < numthreads; ++i)
+        {
+            std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
+            Verteilung[i] = turns[std::max(i*8-1,0)];
+        }
+        HowFair = Varianz(iterations,numthreads,Verteilung);
+        totruntime = totruntime + runtime;
+        //std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+        //std::cout << std::endl << "iterations " << iterations << " numthreads " << results[iterations][0] << " runtime " << results[iterations][1] << " HowFair " << results[iterations][2] << std::endl;
         
     }
-    end = std::chrono::high_resolution_clock::now();
-    runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
-
-    std::cout << std::endl << "Program ran in TTAS Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
-    std::cout << "counter " << counter << std::endl << std::endl;
-    for (int i = 0; i < numthreads; ++i)
-        std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
-    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
-
-       results[0] = numthreads;
-    results[1] = iterations;
-    results[2] = results[numthreads];
-    results[3] = HowFair;
-
-    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
-    results[numthreads] = runtime;
-    file_name = "data/"+std::to_string(numthreads)+"_"+std::to_string(iterations)+"_"+"TTAS_lock.csv";
-    std::ofstream myfile;
-    myfile.open (file_name);
-    myfile << "NumberOfThreads" << ";" << "NumberOfIterations" << ";" << "RunTime" << ";" << "HowFair" << "; \n";
-    myfile << numthreads << ";" << iterations << ";" << results[numthreads] << ";" << HowFair << ";";	  
-    myfile << std::endl;
-    myfile.close();
-
+    //totruntime = Varianz(iterations,numthreads,Time);
+    output("TTAS_lock",iterations,numthreads,numofiter,totruntime,HowFair);
 }
 
 ///////////////////////////////////////////////////////////// Ticket
 
-void run_Ticket_lock(int numthreads, int iterations) {
+void run_Ticket_lock(int numthreads, int iterations, int numofiter) 
+{
 
     // setup timer variables
-    std::chrono::time_point<std::chrono::high_resolution_clock> start;
-    std::chrono::time_point<std::chrono::high_resolution_clock> end;
-    double runtime;
 
+    //std::vector<int> Verteilung (numthreads,0);
     int tid;                                // thread ID
     long int counter = 0;                   // counter gets incremented in CS
-    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    double Verteilung[numthreads];
+    double Time[numofiter];
+    double turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
     Ticket_lock mylock;
 
     for (int i = 0; i < numthreads; ++i)
@@ -442,58 +444,55 @@ void run_Ticket_lock(int numthreads, int iterations) {
     
 
     omp_set_num_threads(numthreads);        // setting number of threads
-	
-    start = std::chrono::high_resolution_clock::now();
-    #pragma omp parallel private(tid) shared(counter)
-	{		    
-        tid = omp_get_thread_num();
-        while(counter < iterations)
-        {
-            mylock.lock();
-            try {
-                if(counter < iterations)
-                {
-                    counter++;
-                    turns[std::max(tid*8-1,0)]++;
-                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
-                }
+	for (int n = 0; n < numofiter; n++)
+    {
+        start = std::chrono::high_resolution_clock::now();
+        #pragma omp parallel private(tid) shared(counter)
+        {		    
+            tid = omp_get_thread_num();
+            while(counter < iterations)
+            {
+                mylock.lock();
+                counter = CS(counter,iterations,turns,tid);
+                mylock.unlock();
             }
-            catch (int j) {
-                std::cout << "Some error occured while in CS" << std::endl;
-            }
-            mylock.unlock();
+            
         }
-        
+            end = std::chrono::high_resolution_clock::now();
+            runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+            Time[n] = runtime;
+            //std::cout << std::endl << "Program ran in TAS Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+            //std::cout << "counter " << counter << std::endl << std::endl;
+
+
+            for (int i = 0; i < numthreads; ++i)
+            {
+                std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
+                Verteilung[i] = turns[std::max(i*8-1,0)];
+            }
+            HowFair = Varianz(iterations,numthreads,Verteilung);
+            totruntime = totruntime + runtime;
+            //std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+            //std::cout << std::endl << "iterations " << iterations << " numthreads " << results[iterations][0] << " runtime " << results[iterations][1] << " HowFair " << results[iterations][2] << std::endl;
+            
     }
-    end = std::chrono::high_resolution_clock::now();
-    runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
-
-    std::cout << std::endl << "Program ran in Ticket Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
-    std::cout << "counter " << counter << std::endl << std::endl;
-    for (int i = 0; i < numthreads; ++i)
-        std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
-    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
-
+    //totruntime = Varianz(iterations,numthreads,Time);
+    output("Ticket_lock",iterations,numthreads,numofiter,totruntime,HowFair);
 }
 
 ///////////////////////////////////////////////////////////// Array
 
-void run_Array_lock(int numthreads, int iterations) {
+void run_Array_lock(int numthreads, int iterations, int numofiter) 
+{
 
     // setup timer variables
-    std::chrono::time_point<std::chrono::high_resolution_clock> start;
-    std::chrono::time_point<std::chrono::high_resolution_clock> end;
-    double runtime;
 
-    double HowFair;
-    double mean = 0;
-    double var = 0;
-    double tmp = 0;
-    std::vector<int> Verteilung (numthreads,0);
-
+    //std::vector<int> Verteilung (numthreads,0);
     int tid;                                // thread ID
     long int counter = 0;                   // counter gets incremented in CS
-    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    double Verteilung[numthreads];
+    double Time[numofiter];
+    double turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
     Array_lock mylock(numthreads);
 
     for (int i = 0; i < numthreads; ++i)
@@ -501,53 +500,56 @@ void run_Array_lock(int numthreads, int iterations) {
     
 
     omp_set_num_threads(numthreads);        // setting number of threads
-	
-    start = std::chrono::high_resolution_clock::now();
-    #pragma omp parallel private(tid) shared(counter)
-	{		    
-        thread_local int mySlot;
-        tid = omp_get_thread_num();
-        while(counter < iterations)
-        {
-            mylock.lock(&mySlot);
-            try {
-                if(counter < iterations)
-                {
-                    counter++;
-                    turns[std::max(tid*8-1,0)]++;
-                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
-                }
+	for (int n = 0; n < numofiter; n++)
+    {	
+        start = std::chrono::high_resolution_clock::now();
+        #pragma omp parallel private(tid) shared(counter)
+        {		    
+            thread_local int mySlot;
+            tid = omp_get_thread_num();
+            while(counter < iterations)
+            {
+                mylock.lock(&mySlot);
+                counter = CS(counter,iterations,turns,tid);
+                mylock.unlock(&mySlot);
             }
-            catch (int j) {
-                std::cout << "Some error occured while in CS" << std::endl;
-            }
-            mylock.unlock(&mySlot);
+            
         }
-        
-    }
-    end = std::chrono::high_resolution_clock::now();
-    runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+            end = std::chrono::high_resolution_clock::now();
+            runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+            Time[n] = runtime;
+            //std::cout << std::endl << "Program ran in TAS Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+            //std::cout << "counter " << counter << std::endl << std::endl;
 
-    std::cout << std::endl << "Program ran in Array Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
-    std::cout << "counter " << counter << std::endl << std::endl;
-    for (int i = 0; i < numthreads; ++i)
-        std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
-    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+
+            for (int i = 0; i < numthreads; ++i)
+            {
+                std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
+                Verteilung[i] = turns[std::max(i*8-1,0)];
+            }
+            HowFair = Varianz(iterations,numthreads,Verteilung);
+            totruntime = totruntime + runtime;
+            //std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+            //std::cout << std::endl << "iterations " << iterations << " numthreads " << results[iterations][0] << " runtime " << results[iterations][1] << " HowFair " << results[iterations][2] << std::endl;
+            
+    }
+    //totruntime = Varianz(iterations,numthreads,Time);
+    output("Array_lock",iterations,numthreads,numofiter,totruntime,HowFair);
 
 }
 
 ///////////////////////////////////////////////////////////// CLH
 
-void run_CLH_lock(int numthreads, int iterations) {
+void run_CLH_lock(int numthreads, int iterations, int numofiter) {
 
     // setup timer variables
-    std::chrono::time_point<std::chrono::high_resolution_clock> start;
-    std::chrono::time_point<std::chrono::high_resolution_clock> end;
-    double runtime;
 
+    //std::vector<int> Verteilung (numthreads,0);
     int tid;                                // thread ID
     long int counter = 0;                   // counter gets incremented in CS
-    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    double Verteilung[numthreads];
+    double Time[numofiter];
+    double turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
     CLH_lock mylock;
 
     for (int i = 0; i < numthreads; ++i)
@@ -555,63 +557,55 @@ void run_CLH_lock(int numthreads, int iterations) {
     
 
     omp_set_num_threads(numthreads);        // setting number of threads
-	
-    start = std::chrono::high_resolution_clock::now();
-    #pragma omp parallel private(tid) shared(counter)
-	{		    
-        thread_local QNode* pointerToNode;
-        tid = omp_get_thread_num();
-        while(counter < iterations)
-        {
-            mylock.lock(&pointerToNode);
-            try {
-                if(counter < iterations)
-                {
-                    counter++;
-                    turns[std::max(tid*8-1,0)]++;
-                    std::cout << "Thread " << tid << " is in critical section" << std::endl;
-                }
+	for (int n = 0; n < numofiter; n++)
+    {	
+        start = std::chrono::high_resolution_clock::now();
+        #pragma omp parallel private(tid) shared(counter)
+        {		    
+            thread_local QNode* pointerToNode;
+            tid = omp_get_thread_num();
+            while(counter < iterations)
+            {
+                mylock.lock(&pointerToNode);
+                counter = CS(counter,iterations,turns,tid);
+                mylock.unlock(pointerToNode);
             }
-            catch (int j) {
-                std::cout << "Some error occured while in CS" << std::endl;
-            }
-            mylock.unlock(pointerToNode);
+            
         }
-        
+            end = std::chrono::high_resolution_clock::now();
+            runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+            Time[n] = runtime;
+            //std::cout << std::endl << "Program ran in TAS Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+            //std::cout << "counter " << counter << std::endl << std::endl;
+
+
+            for (int i = 0; i < numthreads; ++i)
+            {
+                std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
+                Verteilung[i] = turns[std::max(i*8-1,0)];
+            }
+            HowFair = Varianz(iterations,numthreads,Verteilung);
+            totruntime = totruntime + runtime;
+            //std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+            //std::cout << std::endl << "iterations " << iterations << " numthreads " << results[iterations][0] << " runtime " << results[iterations][1] << " HowFair " << results[iterations][2] << std::endl;
+            
     }
-    end = std::chrono::high_resolution_clock::now();
-    runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
-
-    std::cout << std::endl << "Program ran in CLH Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
-    std::cout << "counter " << counter << std::endl << std::endl;
-    for (int i = 0; i < numthreads; ++i)
-        std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
-    std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
-
+    //totruntime = Varianz(iterations,numthreads,Time);
+    output("CLH_lock",iterations,numthreads,numofiter,totruntime,HowFair);
 }
 
 ///////////////////////////////////////////////////////////// MCS
 
 void run_MCS_lock(int numthreads, int iterations, int numofiter) {
 
-    std::cout << "Hello" << std::endl;
     // setup timer variables
-    std::chrono::time_point<std::chrono::high_resolution_clock> start;
-    std::chrono::time_point<std::chrono::high_resolution_clock> end;
-    double runtime;
-    double czero = 0;
-    std::string file_name;
-    double HowFair;
 
-    double mean = 0;
-    double var = 0;
-    double tmp = 0;
-    std::vector<int> Verteilung (numthreads,0);
-
-    std::vector <std::vector<double>> results(numofiter, std::vector<double>(4, 0));
+    //std::vector<int> Verteilung (numthreads,0);
     int tid;                                // thread ID
     long int counter = 0;                   // counter gets incremented in CS
-    long int turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
+    double Verteilung[numthreads];
+    double Time[numofiter];
+    double turns[(numthreads-1)*8+1];     // keeps count of how often a thread got the CS, long has 8 bytes, so write one value every 8 slots to avoid false sharing
     MCS_lock mylock;
 
     for (int i = 0; i < numthreads; ++i)
@@ -621,8 +615,6 @@ void run_MCS_lock(int numthreads, int iterations, int numofiter) {
     omp_set_num_threads(numthreads);        // setting number of threads
 	for (int n = 0; n < numofiter; n++)
     {   
-        czero = 0;
-        tmp = 0;
         start = std::chrono::high_resolution_clock::now();
         #pragma omp parallel private(tid) shared(counter)
         {		    
@@ -631,64 +623,30 @@ void run_MCS_lock(int numthreads, int iterations, int numofiter) {
             while(counter < iterations)
             {
                 mylock.lock(&my);
-                try {
-                    if(counter < iterations)
-                    {
-                        counter++;
-                        turns[std::max(tid*8-1,0)]++;
-                        std::cout << "Thread " << tid << " is in critical section" << std::endl;
-                    }
-                }
-                catch (int j) {
-                    //std::cout << "Some error occured while in CS" << std::endl;
-                }
+                counter = CS(counter,iterations,turns,tid);
                 mylock.unlock(&my);
-            }
-            
+            }          
         }
         end = std::chrono::high_resolution_clock::now();
         runtime = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+        Time[n] = runtime;
+        //std::cout << std::endl << "Program ran in TAS Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
+        //std::cout << "counter " << counter << std::endl << std::endl;
+
+
         for (int i = 0; i < numthreads; ++i)
         {
-            //std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
-            //std::cout << i <<  std::endl;
+            std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
             Verteilung[i] = turns[std::max(i*8-1,0)];
         }
-
-        mean = iterations/numthreads;
-
-        for (int i = 0; i < numthreads; ++i)
-        {
-            tmp = tmp + (Verteilung[i] - mean) * (Verteilung[i] - mean);           
-        }
-
-        var = sqrt(tmp/numthreads);
+        HowFair = Varianz(iterations,numthreads,Verteilung);
+        totruntime = totruntime + runtime;
+        //std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
+        //std::cout << std::endl << "iterations " << iterations << " numthreads " << results[iterations][0] << " runtime " << results[iterations][1] << " HowFair " << results[iterations][2] << std::endl;
         
-        HowFair = var;
-
-        results[n][0] = numthreads;
-        results[n][1] = runtime;
-        results[n][2] = var;
-        //std::cout << std::endl << "Program ran in MCS_Lock with " << iterations << " iterations. Those are the results. " << std::endl << std::endl;
-        //std::cout << "counter " << counter << std::endl << std::endl;
-        for (int i = 0; i < numthreads; ++i)
-        {   
-            std::cout << "turns[" << i << "] is " << turns[std::max(i*8-1,0)] << std::endl;
-        }
-        std::cout << std::endl << "runtime " << runtime << " s" << std::endl;
-       // results[iterations][2] = 1/(1 + czero);
-        //std::cout << "iterations " << iterations << "HowFair " << results[iterations][2] << "zeros " << czero << std::endl;
     }
-    file_name = "data/Max"+std::to_string(iterations)+"_"+std::to_string(numthreads)+"MCS_lock.csv";
-    std::ofstream myfile;
-    myfile.open (file_name);
-    myfile << "NumberOfThreads" << ";" << "NumberOfIterations" << ";" << "RunTime" << ";" << "HowFair" << "; \n";
-    for (int n = 0; n < numofiter; n++)
-    {
-        myfile << iterations << ";" << results[n][0] << ";" << results[n][1] << ";" << results[n][2] << ";";	  
-        myfile << std::endl;
-    }
-    myfile.close();
+    //totruntime = Varianz(iterations,numthreads,Time);
+    output("MCS_lock",iterations,numthreads,numofiter,totruntime,HowFair);
 }
 
 };
@@ -698,45 +656,30 @@ void run_MCS_lock(int numthreads, int iterations, int numofiter) {
 
 int main(int argc, char *argv[]) 
 {
-
-    std::string file_name;
-    std::vector<double> results;
     int mode = std::atoi(argv[1]);
     int numthreads = std::atoi(argv[2]);    // number of threads, command line input
-    //long int maxiterations = std::atoi(argv[3]);              // number of iterations in CS
-    long int iterations = std::atoi(argv[3]);
-    results = std::vector<double>(3, 0);
-    int numofiter = 50;
+    long int iterations = std::atoi(argv[3]); // number of iterations in CS
+    int numofiter = std::atoi(argv[4]); // number of iterations in CS
 		
     execute Locker;
-    //for (int iterations = 0; iterations < maxiterations; iterations = iterations + 1)
-    //{
+
         if (mode == 1) {
             Locker.run_TAS_lock(numthreads, iterations, numofiter);
         }
         if (mode == 2) {
-            Locker.run_TTAS_lock(numthreads, iterations);
+            Locker.run_TTAS_lock(numthreads, iterations, numofiter);
         }
         if (mode == 3) {
-            Locker.run_Ticket_lock(numthreads, iterations);
+            Locker.run_Ticket_lock(numthreads, iterations, numofiter);
         }
         if (mode == 4) {
-            Locker.run_Array_lock(numthreads, iterations);
+            Locker.run_Array_lock(numthreads, iterations, numofiter);
         }
         if (mode == 5) {
-            Locker.run_CLH_lock(numthreads, iterations);
+            Locker.run_CLH_lock(numthreads, iterations, numofiter);
         }
         if (mode == 6) {
             Locker.run_MCS_lock(numthreads, iterations, numofiter);
         }
-    //}
-    /*file_name = "data/"+std::to_string(numthreads)+"TAS_lock.csv";
-    std::ofstream myfile;
-    myfile.open (file_name);
-    myfile << "NumberOfThreads" << ";" << "NumberOfIterations" << ";" << "RunTime" << ";" << "HowFair \n";
-    myfile << numthreads << ";" << iterations << ";" << results[numthreads] << ";" << HowFair;	  
-    myfile << std::endl;
-    myfile.close();
-    */
 }
 
