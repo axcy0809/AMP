@@ -271,7 +271,7 @@ public:
     double var = 0;
     double tmp = 0;
 
-long int CS(long int counter, int iterations, double *turns,int tid)
+long int CS(long int counter, int iterations, double *turns, int tid)
 {
     //std::cout << "Thread " << tid << " is in critical section" << std::endl;
     try {
