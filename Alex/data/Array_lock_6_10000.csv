@@ -1,2 +1,0 @@
-NameOfLock;NumberOfIterations;NumberOfThreads;RunTime;HowFair
-Array_lock;10000;6;1.47865;235.37
